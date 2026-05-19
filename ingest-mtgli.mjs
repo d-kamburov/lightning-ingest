@@ -7,6 +7,7 @@
  */
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { File as H5File, ready as h5Ready, FS as H5FS } from 'h5wasm/node';
+import JSZip from 'jszip';
 
 const ACCOUNT_ID = mustEnv('R2_ACCOUNT_ID');
 const R2_BUCKET = 'lightning-buffer';
@@ -109,14 +110,18 @@ async function downloadProduct(productId) {
   });
   if (!r.ok) throw new Error(`download ${productId}: HTTP ${r.status}`);
   const buf = new Uint8Array(await r.arrayBuffer());
-  // HDF5 magic is `\x89HDF`. NetCDF files always start with this. If we
-  // see anything else the response is an error page or a ZIP wrapper.
-  // Log the situation so we can adjust without another guessing round.
-  const magic = buf.slice(0, 8);
-  const isHdf5 = magic[0] === 0x89 && magic[1] === 0x48 && magic[2] === 0x44 && magic[3] === 0x46;
-  if (!isHdf5) {
-    const head = new TextDecoder().decode(buf.slice(0, 200));
-    console.warn(`[MTI1] ${productId}: not HDF5 (${buf.length}B, type=${r.headers.get('content-type')}). Head: ${head.replace(/\n/g, ' ').slice(0, 160)}`);
+  // EUMETSAT wraps each product in a ZIP that bundles the NetCDF
+  // payload, a quicklook PNG, and a trailer manifest. Detect the ZIP
+  // magic (`PK\x03\x04`) and unpack the first `.nc`-class entry — the
+  // archive includes filenames like `...ARC-NC4E_...` for the data
+  // and `...ARC-PNG_...` for the preview.
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {
+    const zip = await JSZip.loadAsync(buf);
+    const ncEntry = Object.keys(zip.files).find((n) =>
+      /ARC-NC4E|\.(nc|nc4|nc4e)$/i.test(n),
+    );
+    if (!ncEntry) throw new Error(`no NetCDF entry in ZIP for ${productId}: ${Object.keys(zip.files).join(',')}`);
+    return new Uint8Array(await zip.files[ncEntry].async('arraybuffer'));
   }
   return buf;
 }
