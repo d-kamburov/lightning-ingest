@@ -1,0 +1,16 @@
+{
+  "name": "lightning-ingest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pulls GOES-GLM + MTG-LI lightning flashes from public sources and writes a slim per-flash buffer to Cloudflare R2. Designed to run in GitHub Actions on a public repo so the every-minute cron is free.",
+  "scripts": {
+    "ingest:glm":   "node ingest-glm.mjs",
+    "ingest:mtgli": "node ingest-mtgli.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
+    "h5wasm": "^0.7.9"
+  },
+  "engines": { "node": ">=20" }
+}

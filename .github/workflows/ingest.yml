@@ -1,0 +1,50 @@
+name: Lightning ingest
+
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Parse + log only, do not write to R2'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: lightning-ingest
+  cancel-in-progress: false
+
+jobs:
+  glm:
+    name: GLM (GOES-16/18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm install --no-audit --no-fund
+      - env:
+          R2_ACCOUNT_ID:        ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          GLM_DRY_RUN:          ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+        run: node ingest-glm.mjs
+
+  mtgli:
+    name: MTG-LI (MTI1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm install --no-audit --no-fund
+      - env:
+          R2_ACCOUNT_ID:            ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID:         ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY:     ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          EUMETSAT_CONSUMER_KEY:    ${{ secrets.EUMETSAT_CONSUMER_KEY }}
+          EUMETSAT_CONSUMER_SECRET: ${{ secrets.EUMETSAT_CONSUMER_SECRET }}
+          MTGLI_DRY_RUN:            ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+        run: node ingest-mtgli.mjs
