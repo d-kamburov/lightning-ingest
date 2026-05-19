@@ -117,11 +117,25 @@ async function downloadProduct(productId) {
   // and `...ARC-PNG_...` for the preview.
   if (buf[0] === 0x50 && buf[1] === 0x4b) {
     const zip = await JSZip.loadAsync(buf);
-    const ncEntry = Object.keys(zip.files).find((n) =>
-      /ARC-NC4E|\.(nc|nc4|nc4e)$/i.test(n),
-    );
-    if (!ncEntry) throw new Error(`no NetCDF entry in ZIP for ${productId}: ${Object.keys(zip.files).join(',')}`);
-    return new Uint8Array(await zip.files[ncEntry].async('arraybuffer'));
+    const names = Object.keys(zip.files);
+    // MTG-LI LFL products zip together QCK-IMAGE (PNG preview),
+    // CHK-TRAIL (statistics + histograms NetCDF), and one or more
+    // CHK-BODY entries (the actual per-flash NetCDF chunks). We want
+    // BODY; TRAIL has no flash_lat / flash_lon at the root.
+    // Return every BODY entry concatenated by the caller; flashes
+    // across chunks are merged by the bucket grouper anyway.
+    const bodies = names.filter((n) => /CHK-BODY/i.test(n));
+    if (bodies.length === 0) {
+      // No BODY → product contained only metadata, log the manifest so
+      // we can decide whether to keep skipping or follow up.
+      console.warn(`[MTI1] ${productId}: no CHK-BODY in ZIP. Entries: ${names.join(',')}`);
+      return new Uint8Array();
+    }
+    // Caller parses one buffer at a time; return an array so the
+    // calling code can iterate. Done via a small adapter below.
+    return await Promise.all(bodies.map(async (n) =>
+      new Uint8Array(await zip.files[n].async('arraybuffer'))
+    ));
   }
   return buf;
 }
@@ -222,9 +236,15 @@ async function main() {
   const records = [];
   for (const id of fresh) {
     try {
-      const buf = await downloadProduct(id);
-      const recs = await parseMtgliFlashes(buf, id);
-      records.push(...recs);
+      const out = await downloadProduct(id);
+      // downloadProduct now returns either a single Uint8Array (rare,
+      // non-ZIP) or an array of Uint8Arrays (one per CHK-BODY chunk).
+      const buffers = Array.isArray(out) ? out : [out];
+      for (let i = 0; i < buffers.length; i++) {
+        if (!buffers[i].length) continue;
+        const recs = await parseMtgliFlashes(buffers[i], `${id}#${i}`);
+        records.push(...recs);
+      }
     } catch (e) {
       console.warn(`[MTI1] ${id} failed:`, e.message);
     }
