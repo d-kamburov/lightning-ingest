@@ -218,6 +218,27 @@ async function parseMtgliFlashes(buf, sourceKey) {
     const lon = readDataset(file, ['flash_lon', 'flash_longitude', 'longitude']);
     const t   = readDataset(file, ['flash_time', 'time']);
     const en  = readDataset(file, ['flash_radiance', 'flash_energy', 'radiance']);
+    // MTG-LI L2 LFL stores lat/lon as int16 with documented
+    // scale_factor 0.0027 (degrees per count). The readDataset attribute
+    // path doesn't surface the scale value reliably across h5wasm
+    // versions, so we apply the documented constant inline and detect
+    // the "needs scaling" case by integer magnitude (>90 in lat = raw
+    // count). _FillValue -32767 still gets masked here.
+    const MTG_LI_SCALE = 0.0027;
+    function maybeScale(arr) {
+      if (!arr || !arr.length) return arr;
+      const v0 = Number(arr[0]);
+      if (!Number.isFinite(v0) || Math.abs(v0) <= 90) return arr;
+      const out = new Array(arr.length);
+      for (let i = 0; i < arr.length; i++) {
+        const raw = Number(arr[i]);
+        if (raw === -32767) { out[i] = NaN; continue; }
+        out[i] = raw * MTG_LI_SCALE;
+      }
+      return out;
+    }
+    const latS = maybeScale(lat);
+    const lonS = maybeScale(lon);
     if (!lat || !lon || !t) {
       // Dump the file's top-level dataset names once so we can fix the
       // var lookup on the next deploy without another guessing round.
@@ -231,8 +252,8 @@ async function parseMtgliFlashes(buf, sourceKey) {
     }
     const EPOCH_2000 = Date.UTC(2000, 0, 1, 0, 0, 0);
     const out = [];
-    for (let i = 0; i < lat.length; i++) {
-      const la = Number(lat[i]); const lo = Number(lon[i]);
+    for (let i = 0; i < latS.length; i++) {
+      const la = Number(latS[i]); const lo = Number(lonS[i]);
       if (!Number.isFinite(la) || !Number.isFinite(lo)) continue;
       if (Math.abs(la) > 70) continue;
       out.push({
