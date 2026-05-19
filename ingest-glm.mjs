@@ -19,12 +19,11 @@ const BUCKET_STEP_MIN = 10;
 const MAX_FILES_PER_RUN = Number(process.env.GLM_MAX_FILES_PER_RUN || 12);
 const DRY_RUN = process.env.GLM_DRY_RUN === '1';
 
-const NOAA_BUCKETS = { G16: 'noaa-goes16', G18: 'noaa-goes18' };
-
-const noaaClient = new S3Client({
-  region: 'us-east-1',
-  signer: { sign: async (req) => req },
-});
+// NOAA hosts the GLM bucket as a public S3 bucket — we hit the
+// virtual-hosted HTTPS endpoint directly via fetch() rather than the
+// AWS SDK, since the v3 SDK insists on resolving AWS credentials even
+// for anonymous reads and there's no clean way to opt out.
+const NOAA_HOSTS = { G16: 'noaa-goes16.s3.amazonaws.com', G18: 'noaa-goes18.s3.amazonaws.com' };
 
 const r2Client = new S3Client({
   region: 'auto',
@@ -67,17 +66,23 @@ async function listRecentGlmFiles(satCode) {
   const now = new Date();
   const prev = new Date(now.getTime() - 3600_000);
   const prefixes = [glmPrefix(prev), glmPrefix(now)];
+  const host = NOAA_HOSTS[satCode];
   const keys = [];
-  for (const Prefix of prefixes) {
+  for (const prefix of prefixes) {
     try {
-      const out = await noaaClient.send(new ListObjectsV2Command({
-        Bucket: NOAA_BUCKETS[satCode], Prefix,
-      }));
-      for (const c of out.Contents ?? []) {
-        if (c.Key && c.Key.endsWith('.nc')) keys.push(c.Key);
-      }
+      const url = `https://${host}/?list-type=2&prefix=${encodeURIComponent(prefix)}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const xml = await r.text();
+      // S3 ListObjectsV2 XML — minimal regex parse since we only need
+      // <Key> values. The bucket returns up to 1000 keys per call;
+      // GLM's per-prefix file count is bounded (180 per hour per sat)
+      // so we never need to paginate.
+      const re = /<Key>([^<]+)<\/Key>/g;
+      let m;
+      while ((m = re.exec(xml))) if (m[1].endsWith('.nc')) keys.push(m[1]);
     } catch (e) {
-      console.warn(`[${satCode}] list ${Prefix} failed:`, e.message);
+      console.warn(`[${satCode}] list ${prefix} failed:`, e.message);
     }
   }
   keys.sort();
@@ -101,7 +106,7 @@ async function writeCursor(satCode, key) {
 }
 
 async function downloadGlmFile(satCode, key) {
-  const url = `https://${NOAA_BUCKETS[satCode]}.s3.amazonaws.com/${key}`;
+  const url = `https://${NOAA_HOSTS[satCode]}/${key}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
   return new Uint8Array(await r.arrayBuffer());

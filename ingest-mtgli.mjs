@@ -14,7 +14,11 @@ const BUCKET_STEP_MIN = 10;
 const MAX_PRODUCTS_PER_RUN = Number(process.env.MTGLI_MAX_PRODUCTS_PER_RUN || 20);
 const DRY_RUN = process.env.MTGLI_DRY_RUN === '1';
 
-const COLLECTION = 'EO:EUM:DAT:MTG:LI-L2-LFL';
+// Found in the EUMETSAT data store catalog as
+// "LI Lightning Flashes - MTG - 0 degree". The older symbolic ID
+// EO:EUM:DAT:MTG:LI-L2-LFL returns 404; numeric IDs are the canonical
+// reference for MTG collections.
+const COLLECTION = 'EO:EUM:DAT:0691';
 const COLLECTION_ENC = encodeURIComponent(COLLECTION);
 const TOKEN_URL = 'https://api.eumetsat.int/token';
 const SEARCH_URL = `https://api.eumetsat.int/data/search-products/os?format=json&pi=${COLLECTION_ENC}`;
