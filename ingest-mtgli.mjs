@@ -145,7 +145,31 @@ function readDataset(file, names) {
     try {
       const ds = file.get(name);
       const arr = ds?.to_array?.();
-      if (arr) return arr;
+      if (!arr) continue;
+      // CF-style scaled storage. MTG-LI stores coords as int16 with
+      // scale_factor 0.0027 and add_offset 0; without applying these
+      // the parsed values are in raw counts, not degrees. _FillValue
+      // marks "no detection" cells we must skip.
+      let scale = 1, offset = 0, fill = null;
+      try {
+        const sf = ds.attrs?.scale_factor;
+        const ao = ds.attrs?.add_offset;
+        const fv = ds.attrs?.['_FillValue'];
+        const v = (x) => x && typeof x === 'object' && '0' in x ? Number(x[0]) : (typeof x === 'number' ? x : (x?.value ?? null));
+        const sV = v(sf); if (Number.isFinite(sV) && sV !== 0) scale = sV;
+        const oV = v(ao); if (Number.isFinite(oV))             offset = oV;
+        const fV = v(fv); if (Number.isFinite(fV))             fill = fV;
+      } catch {}
+      if (scale === 1 && offset === 0 && fill == null) return arr;
+      // Materialise a JS array with scaling + fill replacement so the
+      // caller's `Number.isFinite` checks naturally skip masked cells.
+      const out = new Array(arr.length);
+      for (let i = 0; i < arr.length; i++) {
+        const raw = Number(arr[i]);
+        if (fill != null && raw === fill) { out[i] = NaN; continue; }
+        out[i] = raw * scale + offset;
+      }
+      return out;
     } catch {}
   }
   return null;
