@@ -151,6 +151,29 @@ function readDataset(file, names) {
   return null;
 }
 
+/** One-time diagnostic. Dumps the resolved dataset name, its first 3
+ *  values, and its HDF5 attributes (scale_factor, units, etc.) so we
+ *  can see whether MTG-LI's `flash_lon` is being delivered raw, scaled,
+ *  or in non-degree units. Logged once per ingest run. */
+let _dumpOnce = false;
+function dumpDataset(file, name, label) {
+  if (_dumpOnce) return;
+  try {
+    const ds = file.get(name);
+    if (!ds) return;
+    const arr = ds.to_array?.();
+    const head = Array.isArray(arr) ? arr.slice(0, 3) : (arr?.[0] ?? null);
+    const attrs = {};
+    try {
+      const attrKeys = ds.attrs ? Object.keys(ds.attrs) : [];
+      for (const k of attrKeys) attrs[k] = ds.attrs[k]?.value ?? ds.attrs[k];
+    } catch {}
+    console.log(`[diag] ${label} (${name}) head=${JSON.stringify(head)} attrs=${JSON.stringify(attrs)}`);
+  } catch (e) {
+    console.log(`[diag] ${label} (${name}) dump failed: ${e.message}`);
+  }
+}
+
 async function parseMtgliFlashes(buf, sourceKey) {
   await h5Ready;
   const fname = `/tmp/mtgli_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
@@ -158,6 +181,15 @@ async function parseMtgliFlashes(buf, sourceKey) {
   let file;
   try {
     file = new H5File(fname, 'r');
+    // Diagnostic dump of every plausible coord/time field on the first
+    // successful parse — lets us see scale_factor, units, and raw head
+    // values so we can fix any unit mismatch without another guess.
+    if (!_dumpOnce) {
+      for (const n of ['flash_lat', 'flash_latitude', 'latitude', 'flash_lon', 'flash_longitude', 'longitude', 'flash_time', 'time']) {
+        dumpDataset(file, n, n);
+      }
+      _dumpOnce = true;
+    }
     const lat = readDataset(file, ['flash_lat', 'flash_latitude', 'latitude']);
     const lon = readDataset(file, ['flash_lon', 'flash_longitude', 'longitude']);
     const t   = readDataset(file, ['flash_time', 'time']);
