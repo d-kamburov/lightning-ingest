@@ -10,7 +10,7 @@
  * endpoint at gfs-pressure-proxy reads back from there.
  */
 import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import h5wasm from 'h5wasm/node';
+import { File as H5File, ready as h5Ready, FS as H5FS } from 'h5wasm/node';
 
 const ACCOUNT_ID = mustEnv('R2_ACCOUNT_ID');
 const R2_BUCKET = 'lightning-buffer';
@@ -113,12 +113,12 @@ async function downloadGlmFile(satCode, key) {
 }
 
 async function parseGlmFlashes(buf, satCode, sourceKey) {
-  await h5wasm.ready;
+  await h5Ready;
   const fname = `/glm_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
-  h5wasm.FS.writeFile(fname, buf);
+  H5FS.writeFile(fname, buf);
   let file;
   try {
-    file = new h5wasm.File(fname, 'r');
+    file = new H5File(fname, 'r');
     const lat   = file.get('flash_lat')?.to_array?.();
     const lon   = file.get('flash_lon')?.to_array?.();
     const t1    = file.get('flash_time_offset_of_first_event')?.to_array?.();
@@ -147,7 +147,7 @@ async function parseGlmFlashes(buf, satCode, sourceKey) {
     return [];
   } finally {
     try { file?.close(); } catch {}
-    try { h5wasm.FS.unlink(fname); } catch {}
+    try { H5FS.unlink(fname); } catch {}
   }
 }
 

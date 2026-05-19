@@ -6,7 +6,7 @@
  * same record schema so /lightning/recent serves both transparently.
  */
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import h5wasm from 'h5wasm/node';
+import { File as H5File, ready as h5Ready, FS as H5FS } from 'h5wasm/node';
 
 const ACCOUNT_ID = mustEnv('R2_ACCOUNT_ID');
 const R2_BUCKET = 'lightning-buffer';
@@ -123,12 +123,12 @@ function readDataset(file, names) {
 }
 
 async function parseMtgliFlashes(buf, sourceKey) {
-  await h5wasm.ready;
+  await h5Ready;
   const fname = `/mtgli_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
-  h5wasm.FS.writeFile(fname, buf);
+  H5FS.writeFile(fname, buf);
   let file;
   try {
-    file = new h5wasm.File(fname, 'r');
+    file = new H5File(fname, 'r');
     const lat = readDataset(file, ['flash_lat', 'flash_latitude']);
     const lon = readDataset(file, ['flash_lon', 'flash_longitude']);
     const t   = readDataset(file, ['flash_time']);
@@ -155,7 +155,7 @@ async function parseMtgliFlashes(buf, sourceKey) {
     return [];
   } finally {
     try { file?.close(); } catch {}
-    try { h5wasm.FS.unlink(fname); } catch {}
+    try { H5FS.unlink(fname); } catch {}
   }
 }
 
