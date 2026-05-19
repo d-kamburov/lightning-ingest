@@ -33,6 +33,13 @@ jobs:
 
   mtgli:
     name: MTG-LI (MTI1)
+    # Serialised after the GLM job to avoid an R2 read-modify-write
+    # race: both ingests append to the same 10-minute bucket keys, and
+    # parallel reads-before-writes would let one job's PUT overwrite
+    # the other's. `needs:` forces a strict order; `always()` keeps
+    # MTG-LI running even if GLM fails.
+    needs: glm
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
