@@ -205,15 +205,6 @@ async function parseMtgliFlashes(buf, sourceKey) {
   let file;
   try {
     file = new H5File(fname, 'r');
-    // Diagnostic dump of every plausible coord/time field on the first
-    // successful parse — lets us see scale_factor, units, and raw head
-    // values so we can fix any unit mismatch without another guess.
-    if (!_dumpOnce) {
-      for (const n of ['flash_lat', 'flash_latitude', 'latitude', 'flash_lon', 'flash_longitude', 'longitude', 'flash_time', 'time']) {
-        dumpDataset(file, n, n);
-      }
-      _dumpOnce = true;
-    }
     const lat = readDataset(file, ['flash_lat', 'flash_latitude', 'latitude']);
     const lon = readDataset(file, ['flash_lon', 'flash_longitude', 'longitude']);
     const t   = readDataset(file, ['flash_time', 'time']);
