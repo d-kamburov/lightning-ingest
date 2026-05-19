@@ -21,7 +21,7 @@ const DRY_RUN = process.env.MTGLI_DRY_RUN === '1';
 const COLLECTION = 'EO:EUM:DAT:0691';
 const COLLECTION_ENC = encodeURIComponent(COLLECTION);
 const TOKEN_URL = 'https://api.eumetsat.int/token';
-const SEARCH_URL = `https://api.eumetsat.int/data/search-products/os?format=json&pi=${COLLECTION_ENC}`;
+const SEARCH_BASE = 'https://api.eumetsat.int/data/search-products/os';
 const DOWNLOAD_URL = (id) =>
   `https://api.eumetsat.int/data/download/collections/${COLLECTION_ENC}/products/${encodeURIComponent(id)}`;
 
@@ -93,7 +93,7 @@ async function listRecentProducts() {
     dtstart: start.toISOString(), dtend: end.toISOString(),
     si: '0', c: '50', sort: 'start,time,0',
   });
-  const r = await fetch(`${SEARCH_URL}&${params}`);
+  const r = await fetch(`${SEARCH_BASE}?${params}`);
   if (!r.ok) throw new Error(`search HTTP ${r.status}: ${await r.text()}`);
   const body = await r.json();
   return (body?.features ?? [])
