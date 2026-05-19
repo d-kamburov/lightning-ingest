@@ -114,7 +114,7 @@ async function downloadGlmFile(satCode, key) {
 
 async function parseGlmFlashes(buf, satCode, sourceKey) {
   await h5Ready;
-  const fname = `/glm_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
+  const fname = `/tmp/glm_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
   H5FS.writeFile(fname, buf);
   let file;
   try {

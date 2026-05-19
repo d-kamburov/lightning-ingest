@@ -124,7 +124,7 @@ function readDataset(file, names) {
 
 async function parseMtgliFlashes(buf, sourceKey) {
   await h5Ready;
-  const fname = `/mtgli_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
+  const fname = `/tmp/mtgli_${process.pid}_${Math.random().toString(36).slice(2)}.nc`;
   H5FS.writeFile(fname, buf);
   let file;
   try {
