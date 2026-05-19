@@ -108,7 +108,17 @@ async function downloadProduct(productId) {
     headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow',
   });
   if (!r.ok) throw new Error(`download ${productId}: HTTP ${r.status}`);
-  return new Uint8Array(await r.arrayBuffer());
+  const buf = new Uint8Array(await r.arrayBuffer());
+  // HDF5 magic is `\x89HDF`. NetCDF files always start with this. If we
+  // see anything else the response is an error page or a ZIP wrapper.
+  // Log the situation so we can adjust without another guessing round.
+  const magic = buf.slice(0, 8);
+  const isHdf5 = magic[0] === 0x89 && magic[1] === 0x48 && magic[2] === 0x44 && magic[3] === 0x46;
+  if (!isHdf5) {
+    const head = new TextDecoder().decode(buf.slice(0, 200));
+    console.warn(`[MTI1] ${productId}: not HDF5 (${buf.length}B, type=${r.headers.get('content-type')}). Head: ${head.replace(/\n/g, ' ').slice(0, 160)}`);
+  }
+  return buf;
 }
 
 function readDataset(file, names) {
