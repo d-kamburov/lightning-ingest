@@ -124,10 +124,16 @@ async function parseGlmFlashes(buf, satCode, sourceKey) {
     const t1    = file.get('flash_time_offset_of_first_event')?.to_array?.();
     const en    = file.get('flash_energy')?.to_array?.();
     const qflag = file.get('flash_quality_flag')?.to_array?.();
-    const ptime = file.get('product_time')?.to_array?.();
-    if (!lat || !lon || !t1 || !en || !qflag || !ptime) return [];
+    // product_time is a scalar dataset. h5wasm exposes scalars as a
+    // single value via `.value`; calling `.to_array()` on a scalar
+    // returns undefined or an empty array depending on version, so
+    // grab the raw value and coerce defensively.
+    const ptimeDs = file.get('product_time');
+    const ptimeRaw = ptimeDs?.value;
+    const ptimeNum = typeof ptimeRaw === 'number' ? ptimeRaw : Number(ptimeRaw?.[0]);
+    if (!lat || !lon || !t1 || !en || !qflag || !Number.isFinite(ptimeNum)) return [];
     const EPOCH_2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
-    const baseMs = EPOCH_2000 + Number(ptime[0]) * 1000;
+    const baseMs = EPOCH_2000 + ptimeNum * 1000;
     const out = [];
     for (let i = 0; i < lat.length; i++) {
       if (qflag[i] !== 0) continue;

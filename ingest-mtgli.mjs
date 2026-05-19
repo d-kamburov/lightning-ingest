@@ -129,12 +129,19 @@ async function parseMtgliFlashes(buf, sourceKey) {
   let file;
   try {
     file = new H5File(fname, 'r');
-    const lat = readDataset(file, ['flash_lat', 'flash_latitude']);
-    const lon = readDataset(file, ['flash_lon', 'flash_longitude']);
-    const t   = readDataset(file, ['flash_time']);
-    const en  = readDataset(file, ['flash_radiance', 'flash_energy']);
+    const lat = readDataset(file, ['flash_lat', 'flash_latitude', 'latitude']);
+    const lon = readDataset(file, ['flash_lon', 'flash_longitude', 'longitude']);
+    const t   = readDataset(file, ['flash_time', 'time']);
+    const en  = readDataset(file, ['flash_radiance', 'flash_energy', 'radiance']);
     if (!lat || !lon || !t) {
-      console.warn(`[MTI1] ${sourceKey}: required vars not found`);
+      // Dump the file's top-level dataset names once so we can fix the
+      // var lookup on the next deploy without another guessing round.
+      try {
+        const keys = file.keys?.() ?? [];
+        console.warn(`[MTI1] ${sourceKey}: required vars not found. Top-level keys: ${JSON.stringify(keys)}`);
+      } catch {
+        console.warn(`[MTI1] ${sourceKey}: required vars not found, key dump failed`);
+      }
       return [];
     }
     const EPOCH_2000 = Date.UTC(2000, 0, 1, 0, 0, 0);
